@@ -1,7 +1,6 @@
 
 # To Learn :
 1. AirFlow
-2.
 
 # Python DevOps
 1. Basic python 
