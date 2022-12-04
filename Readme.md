@@ -33,5 +33,13 @@ rjust : to adjust screen to Righ side
 # Data Structure :
 
 
+# Git Branch :
+create a branch:          -->  git branch <branchname>
+switched to other branch  -->  git checkout <branchname>
+Delte existing branch     -->  git branch --delete <branchname>
+delete branch locally     -->  git branch -d localBranchName
+delete branch remotely    -->  git push origin --delete remoteBranchName
+
+
 
 
