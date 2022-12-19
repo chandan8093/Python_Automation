@@ -1,0 +1,215 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Creating a trail for non-prod Environment",
+    "Parameters": 
+	{
+		"bucketname": 
+		{
+			"Type": "String",
+			"Default" : "cloudtrail-logs",
+			"Description": "Please enter Customer account Alias name here."
+		}
+		
+    },
+    "Resources": 
+	{
+		"S3BucketForCloudTrail": 
+		{
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "Properties": 
+			{
+				"BucketName" : { "Fn::Join": [ "-", [ "jk-np", { "Ref": "bucketname" }, "events" ] ] },
+                
+				"Tags" : [{"Key" : "Name","Value" : { "Ref": "bucketname" }}]
+		        
+			}
+        },
+
+        "S3BucketPolicy": 
+		{
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": 
+				{
+                    "Ref": "S3BucketForCloudTrail"
+                },
+                "PolicyDocument": 
+				{
+                    "Version": "2012-10-17",
+                    "Statement": 
+					[
+                        {
+                            "Sid": "BucketACLLogsCloudtrail",
+                            "Effect": "Allow",
+                            "Principal": { "Service": ["cloudtrail.amazonaws.com"] } ,
+                            "Action": "s3:GetBucketAcl",
+                            "Resource": { "Fn::GetAtt": ["S3BucketForCloudTrail", "Arn" ] }
+							
+                        },
+
+                        {
+                            "Sid": "PUTLogsCloudtrail",
+                            "Effect": "Allow",
+                            "Principal": {"Service":[ "cloudtrail.amazonaws.com" ]},
+                            "Action": "s3:PutObject",
+                            "Resource":  
+                            { "Fn::Join":
+                             [
+                                "",
+                                [
+                                    {
+                                        "Fn::GetAtt": [
+                                            "S3BucketForCloudTrail",
+                                            "Arn"
+                                        ]
+                                    },
+                                    "/AWSLogs/*"
+                                ]
+                             ]
+                            },
+                        
+                            "Condition": {
+                                "StringEquals": {
+                                    "s3:x-amz-acl": "bucket-owner-full-control"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+
+
+		"RoleForCwLogsCloudTrail": {
+            "Type": "AWS::IAM::Role",
+            "Properties": 
+			{
+                "RoleName" :{ "Fn::Join": [ "-", [ "jk-np", { "Ref": "bucketname" }, "Role" ] ] } ,
+                "Description" : "Role that give permission to Log Group Cloudwatch",
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "RoleForCloudwatch",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "cloudtrail.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": 
+				[
+                    {
+                        "PolicyName": { "Fn::Join": [ "-", [ "jk-np", { "Ref": "bucketname" }, "policy" ] ] },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": 
+                            [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": { "Fn::GetAtt": ["LogGroupCloudwatch", "Arn" ] }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+		"LogGroupCloudwatch":
+		{
+			"Type" : "AWS::Logs::LogGroup",
+			"Properties" : {
+				
+				"LogGroupName" : { "Fn::Join": [ "-", [ "jk-np", "Cloudwatch",{ "Ref": "bucketname" } ] ] },
+				"Tags" : [ {"Key" : "Env","Value" : "non-prod"} ]
+			  }
+		},
+
+
+		"TrailEvents": {
+            "Type": "AWS::CloudTrail::Trail",
+            "Properties": {
+
+                "TrailName": { "Fn::Join": [ "-", [ "jk-np",{ "Ref": "bucketname" },"events" ] ] },
+
+				"CloudWatchLogsLogGroupArn" : { "Fn::GetAtt": ["LogGroupCloudwatch", "Arn" ] },
+				"CloudWatchLogsRoleArn" : { "Fn::GetAtt": ["RoleForCwLogsCloudTrail", "Arn" ] },
+
+                "IsLogging": true,
+                "EnableLogFileValidation": true,
+                
+				"EventSelectors": [
+                    {
+                        "IncludeManagementEvents": true,
+                        "ReadWriteType": "All"
+                    },
+					{
+                        "DataResources": [
+                            {
+                                "Type": "AWS::S3::Object",
+                                "Values": [
+                                    "arn:aws:s3:::"
+                                ]
+                            },
+                            {
+                                "Type": "AWS::Lambda::Function",
+                                "Values": [
+                                    "arn:aws:lambda"
+                                ]
+                            }
+                        ],
+                        "ReadWriteType": "All"
+                    },
+					{
+						
+					  }
+                ],
+				"InsightSelectors":
+				[							  
+					 { "InsightType": "ApiErrorRateInsight"},
+					 { "InsightType": "ApiCallRateInsight" }
+				],
+
+                "IsMultiRegionTrail": true,
+                "IncludeGlobalServiceEvents": true,
+                "S3BucketName": { "Ref": "S3BucketForCloudTrail"  },
+                "Tags" :
+                [
+                    {"Key" : "Name","Value" : { "Ref": "bucketname" }},
+                    {"Key" : "Env","Value" : "non-prod"}
+                ]
+               
+            },
+            "DependsOn": ["S3BucketPolicy","RoleForCwLogsCloudTrail"]
+        }
+    
+
+        
+	 },
+    "Outputs": 
+    {
+        "CloudTraillogsarn":
+        {
+            "Description" : "CloudTrail ARN",
+            "Value": { "Fn::GetAtt" : ["TrailEvents", "Arn"] } 
+        },
+        "CloudWatchrolearn":
+        {
+            "Description" : "Role arn For cloudwatch",
+            "Value": { "Fn::GetAtt" : ["RoleForCwLogsCloudTrail", "Arn"] } 
+        },
+        "LogGrouparn":
+        {
+            "Description" : "Role arn For LogGroup In CloudWatch",
+            "Value": { "Fn::GetAtt" : ["LogGroupCloudwatch", "Arn"] } 
+        }
+
+    }
+}

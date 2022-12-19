@@ -19,8 +19,9 @@ fo.close()
 
 '''
 # Read the content
-fo=open("test.txt","r")
-data=fo.readlines()
-for i in range(3):
-    print(data[-1])
+
+my_content=["chandan","sakshi","Neeraj","Hi ALL","append added","new append"]
+fo=open("test.txt","a")
+for i in my_content:
+    fo.write(i+"\n")
 fo.close()
